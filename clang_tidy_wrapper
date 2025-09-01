@@ -1,0 +1,117 @@
+#! /usr/bin/env python3
+#
+
+
+import os
+import pathlib
+import re
+import subprocess
+import sys
+from typing import List, Optional
+
+
+###################################################################
+ENV = os.environ.copy()
+ENV["LC_ALL"] = "C"
+
+
+def check_run_output(cmd: List[str], shell: bool = False, ignore_stderr: bool = False) -> List[str]:
+    p = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL if ignore_stderr else subprocess.STDOUT,
+        shell=shell,
+        env=ENV,
+    )
+    lines = [line.decode().rstrip() for line in p.stdout.readlines()]
+    rc = p.wait()
+    if rc != 0:
+        print('"{}" returned {}. Output:'.format(" ".join(cmd), rc))
+        for line in lines:
+            print(line)
+        assert False
+    return lines
+
+
+###################################################################
+def get_clang_tidy_config_file(file: str) -> Optional[str]:
+    dir = pathlib.Path(file).resolve().parent
+    while True:
+        config_file = dir / ".clang-tidy"
+        if config_file.is_file():
+            return str(config_file)
+        dir = dir.parent
+        if str(dir) in ["/", ""]:
+            return None
+
+
+###################################################################
+def print_red(s: str) -> None:
+    print("\033[1;31m{}\033[0m".format(s))
+
+
+###################################################################
+BAZEL_WORKSPACE_DIR = ENV["BAZEL_WORKSPACE_DIR"]
+CLANG_TIDY = ENV["CLANG_TIDY"]
+INPUT_FILE = sys.argv[1]
+OUTPUT_FILE = sys.argv[2]
+CLANG_TIDY_CONFIG_FILE = get_clang_tidy_config_file(INPUT_FILE)
+WARNING_BEGIN_PATTERN = re.compile(r"^(.+):\d+:\d+: warning: ")
+FILE_PATTERN = re.compile(r"(.+):\d+:\d+: ")
+WARNINGS_GENERATED_PATTERN = re.compile(r"^\d+ warning(s){0,1} generated.$")
+
+
+###################################################################
+cmd = [
+    CLANG_TIDY,
+    "--allow-no-checks",
+    "--header-filter=.*",
+    "--quiet",
+    "--use-color=0",
+]
+if CLANG_TIDY_CONFIG_FILE:
+    cmd.append("--config-file={}".format(CLANG_TIDY_CONFIG_FILE))
+cmd.append(INPUT_FILE)
+cmd.append("--")
+cmd.extend(sys.argv[3:])
+lines = check_run_output(cmd)
+
+
+output = True
+output_lines = []
+for line in lines:
+    if line == "No checks enabled.":
+        continue
+
+    match = WARNINGS_GENERATED_PATTERN.match(line)
+    if match:
+        continue
+
+    match = WARNING_BEGIN_PATTERN.match(line)
+    if match:
+        file = match.group(1)
+        absfile = os.path.realpath(file)
+        if absfile.startswith(BAZEL_WORKSPACE_DIR):
+            output = True
+            output_lines.append(line)
+        else:
+            # Skip issues from other workspace.
+            output = False
+    elif output:
+        output_lines.append(line)
+
+
+with open(OUTPUT_FILE, "w") as f:
+    f.write("From Linting {}:\n".format(INPUT_FILE))
+    for line in output_lines:
+        for match in FILE_PATTERN.finditer(line):
+            file = match.group(1)
+            absfile = os.path.realpath(file)
+            if absfile.startswith(BAZEL_WORKSPACE_DIR):
+                # Show files relative to current workspace.
+                line = line.replace(file, absfile.replace(BAZEL_WORKSPACE_DIR + os.sep, ""))
+            else:
+                # Show "realpath".
+                line = line.replace(file, absfile)
+        print_red(line)
+        f.write("{}\n".format(line))

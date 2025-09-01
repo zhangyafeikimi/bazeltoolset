@@ -1,0 +1,30 @@
+#! /bin/bash
+#
+
+set -e
+
+if test $(uname -s) != Linux; then
+    echo This script is only for Linux.
+    exit 1
+fi
+
+if test "x$(which valgrind 2>/dev/null)" == x; then
+    echo valgrind is unavailable.
+    echo Please install valgrind.
+    exit 1
+fi
+
+OUTPUT_FILE=$(realpath valgrind.txt)
+
+if test $# == 0; then
+    BAZEL_FLAGS=...
+else
+    BAZEL_FLAGS="$@"
+fi
+bazel test \
+    --run_under="valgrind --tool=memcheck --leak-check=full" \
+    --test_output=all \
+    --cache_test_results=no \
+    $BAZEL_FLAGS |
+    tee $OUTPUT_FILE
+echo Generated \"$OUTPUT_FILE\".

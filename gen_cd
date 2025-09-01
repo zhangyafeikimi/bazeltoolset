@@ -1,0 +1,118 @@
+#! /usr/bin/env python3
+#
+
+
+import json
+import os
+import pathlib
+import subprocess
+import sys
+from typing import List
+
+
+###################################################################
+ENV = os.environ.copy()
+ENV["LC_ALL"] = "C"
+
+
+def check_run_output(cmd: List[str], shell: bool = False, ignore_stderr: bool = False) -> List[str]:
+    p = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL if ignore_stderr else subprocess.STDOUT,
+        shell=shell,
+        env=ENV,
+    )
+    lines = [line.decode().rstrip() for line in p.stdout.readlines()]
+    rc = p.wait()
+    if rc != 0:
+        print('"{}" returned {}. Output:'.format(" ".join(cmd), rc))
+        for line in lines:
+            print(line)
+        assert False
+    return lines
+
+
+def check_run(cmd: List[str], shell: bool = False) -> None:
+    p = subprocess.Popen(
+        cmd,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        shell=shell,
+        env=ENV,
+    )
+    rc = p.wait()
+    if rc != 0:
+        print('"{}" returned {}.'.format(" ".join(cmd), rc))
+        assert False
+
+
+###################################################################
+def get_bazel_workspace_dir() -> str:
+    cwd = os.getcwd()
+    dir = pathlib.Path(cwd)
+    while True:
+        if (dir / "WORKSPACE").is_file() or (dir / "WORKSPACE.bazel").is_file():
+            return str(dir.resolve())
+        dir = dir.parent
+        assert str(dir) not in ["/", ""], '"{}" is not under a Bazel workspace.'.format(cwd)
+
+
+def get_bazel_execution_root_dir() -> str:
+    cmd = [
+        "bazel",
+        "info",
+        "execution_root",
+    ]
+    lines = check_run_output(cmd, ignore_stderr=True)
+    return os.path.realpath(lines[0])
+
+
+BAZEL_WORKSPACE_DIR = get_bazel_workspace_dir()
+BAZEL_EXECUTION_ROOT_DIR = get_bazel_execution_root_dir()
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+BIN_DIR = os.path.realpath(".").replace(BAZEL_WORKSPACE_DIR, os.path.join(BAZEL_WORKSPACE_DIR, "bazel-bin"))
+OUTPUT_FILE = os.path.realpath("compile_commands.json")
+
+
+###################################################################
+def run_aspect() -> None:
+    print("Running the aspect...")
+    cmd = [
+        "bazel",
+        "build",
+        "--color=yes",
+        "--override_repository=bazeltoolset={}".format(ROOT_DIR),
+        "--aspects=@bazeltoolset//:aspects.bzl%gen_cd_aspect",
+        "--output_groups=src_files,all_cd_files,all_hdr_files,all_cds",
+    ]
+    if len(sys.argv) > 1:
+        cmd.extend(sys.argv[1:])
+    else:
+        cmd.append("...")
+    check_run(cmd)
+
+
+def collect() -> None:
+    files = sorted(pathlib.Path(BIN_DIR).glob("**/*.cd.json"))
+    print("Collected {} cd files.".format(len(files)))
+    cds = []
+
+    for file in files:
+        with open(file, "r") as f:
+            cds.extend(json.load(f))
+        file.unlink()
+
+    for cd in cds:
+        cd["directory"] = BAZEL_EXECUTION_ROOT_DIR
+
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(cds, f, indent=4)
+        f.write("\n")
+    print('Generated "{}".'.format(OUTPUT_FILE))
+
+
+###################################################################
+if __name__ == "__main__":
+    run_aspect()
+    collect()

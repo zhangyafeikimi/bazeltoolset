@@ -1,0 +1,39 @@
+#! /bin/bash
+#
+
+set -e
+
+if test $(uname -s) != Linux; then
+    echo This script is only for Linux.
+    exit 1
+fi
+
+if test "x$(which lcov 2>/dev/null)" == x; then
+    echo lcov is unavailable.
+    echo Please install lcov.
+    exit 1
+fi
+
+if test "x$(which genhtml 2>/dev/null)" == x; then
+    echo genhtml is unavailable.
+    echo Please install lcov.
+    exit 1
+fi
+
+BAZEL_WORKSPACE_DIR=$(bazel info workspace)
+COVERAGE_REPORT_FILE=$(bazel info output_path)/_coverage/_coverage_report.dat
+OUTPUT_DIR=$(realpath coverage)
+
+if test $# == 0; then
+    BAZEL_FLAGS=...
+else
+    BAZEL_FLAGS="$@"
+fi
+bazel coverage \
+    --combined_report=lcov \
+    --instrument_test_targets \
+    $BAZEL_FLAGS
+rm -rf $OUTPUT_DIR
+cd $BAZEL_WORKSPACE_DIR
+genhtml -q -o $OUTPUT_DIR $COVERAGE_REPORT_FILE
+echo Generated \"$OUTPUT_DIR\".

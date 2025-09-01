@@ -1,0 +1,12 @@
+licenses(["notice"])
+
+# buildifier: disable=native-sh-binary
+sh_binary(
+    name = "_clang_tidy_wrapper",
+    srcs = [
+        "clang_tidy_wrapper",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
