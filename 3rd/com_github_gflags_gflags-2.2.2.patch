@@ -1,0 +1,28 @@
+diff --git a/bazel/gflags.bzl b/bazel/gflags.bzl
+index 533fd61..8fd4f8c 100644
+--- a/bazel/gflags.bzl
++++ b/bazel/gflags.bzl
+@@ -73,6 +73,8 @@ def gflags_library(hdrs=[], srcs=[], threads=1):
+         "-DHAVE_STRTOLL",
+         "-DHAVE_STRTOQ",
+         "-DHAVE_RWLOCK",
++        "-std=c++17",
++        "-w",
+     ] + select({
+         "//:x64_windows": [
+             "-DOS_WINDOWS",
+@@ -85,9 +87,13 @@ def gflags_library(hdrs=[], srcs=[], threads=1):
+     })
+     linkopts = []
+     if threads:
++        copts += select({
++            "//:x64_windows": [],
++            "//conditions:default": ["-pthread"],
++        })
+         linkopts += select({
+             "//:x64_windows": [],
+-            "//conditions:default": ["-lpthread"],
++            "//conditions:default": ["-pthread"],
+         })
+     else:
+         name += "_nothreads"

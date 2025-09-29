@@ -1,0 +1,48 @@
+diff --git a/BUILD b/BUILD
+index 1690d42..5ea4682 100644
+--- a/BUILD
++++ b/BUILD
+@@ -46,9 +46,9 @@ COPTS = select({
+     ":msvc": MSVC_COPTS,
+     "//conditions:default": [
+         "-DHAVE_ZLIB",
+-        "-Wmissing-field-initializers",
+-        "-Woverloaded-virtual",
+-        "-Wno-sign-compare",
++        "-std=c++17",
++        "-w",
++        "-pthread",
+     ],
+ })
+
+@@ -137,7 +137,7 @@ LINK_OPTS = select({
+         "-ignore:4221",
+     ],
+     "//conditions:default": [
+-        "-lpthread",
++        "-pthread",
+         "-lm",
+     ],
+ })
+@@ -513,6 +513,7 @@ cc_library(
+ cc_binary(
+     name = "protoc",
+     srcs = ["src/google/protobuf/compiler/main.cc"],
++    copts = COPTS,
+     linkopts = LINK_OPTS,
+     visibility = ["//visibility:public"],
+     deps = [":protoc_lib"],
+@@ -778,12 +779,7 @@ cc_test(
+         ],
+         ":msvc": [],
+     }),
+-    copts = COPTS + select({
+-        ":msvc": [],
+-        "//conditions:default": [
+-            "-Wno-deprecated-declarations",
+-        ],
+-    }),
++    copts = COPTS,
+     data = [
+         ":test_plugin",
+     ] + glob([
