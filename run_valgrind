@@ -21,10 +21,20 @@ if test $# == 0; then
 else
     BAZEL_FLAGS="$@"
 fi
-bazel test \
-    --run_under="valgrind --tool=memcheck --leak-check=full" \
-    --test_output=all \
-    --cache_test_results=no \
-    $BAZEL_FLAGS |
-    tee $OUTPUT_FILE
+SUPP=$(pwd)/valgrind.supp
+if test -f $SUPP; then
+    bazel test \
+        --run_under="valgrind --tool=memcheck --leak-check=full --suppressions=$SUPP" \
+        --test_output=all \
+        --cache_test_results=no \
+        $BAZEL_FLAGS |
+        tee $OUTPUT_FILE
+else
+    bazel test \
+        --run_under="valgrind --tool=memcheck --leak-check=full" \
+        --test_output=all \
+        --cache_test_results=no \
+        $BAZEL_FLAGS |
+        tee $OUTPUT_FILE
+fi
 echo Generated \"$OUTPUT_FILE\".
