@@ -32,6 +32,7 @@ CC_SRC_EXTENSIONS = [
     "cc",
     "cpp",
     "cxx",
+    "cu",
 ]
 
 UNKNOWN_HDR_EXTENSIONS = [
@@ -45,6 +46,7 @@ CC_HDR_EXTENSIONS = [
     "ipp",
     "hh",
     "hxx",
+    "cuh",
 ]
 
 # https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html
